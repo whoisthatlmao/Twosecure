@@ -25,6 +25,13 @@ fn is_vault_initialized() -> bool {
 }
 
 #[tauri::command]
+fn get_username() -> String {
+    std::env::var("USERNAME")
+        .or_else(|_| std::env::var("USER"))
+        .unwrap_or_else(|_| "Utilisateur".to_string())
+}
+
+#[tauri::command]
 fn create_vault(state: State<'_, AppState>, master_password: String) -> Result<String, String> {
     if vault_exists() {
         return Err("Le coffre-fort existe déjà sur cette machine".to_string());
@@ -572,6 +579,7 @@ pub fn run() {
             unlink_telegram,
             reset_vault,
             change_master_password,
+            get_username,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

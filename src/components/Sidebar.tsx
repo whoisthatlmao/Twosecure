@@ -1,5 +1,6 @@
-import React from 'react';
-import { ShieldCheck, Key, CreditCard, FileText, Star, Lock, Shield, HardDriveDownload, Timer, Trash2, Settings, ShieldCheck as ShieldIcon, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ShieldCheck, Key, CreditCard, FileText, Star, Lock, Shield, HardDriveDownload, Timer, Trash2, Settings, ShieldCheck as ShieldIcon, RefreshCw, User } from 'lucide-react';
+import { invoke } from '@tauri-apps/api/core';
 
 
 interface SidebarProps {
@@ -25,6 +26,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenAudit,
   onOpenUpdate,
 }) => {
+  const [username, setUsername] = useState<string>('');
+
+  useEffect(() => {
+    invoke<string>('get_username').then(setUsername).catch(() => setUsername(''));
+  }, []);
   const menuItems = [
     { id: 'all',       label: 'Toutes les entrées', icon: Key,         count: entryCounts['all']       || 0 },
     { id: 'favorites', label: 'Favoris',             icon: Star,        count: entryCounts['favorites'] || 0 },
@@ -72,12 +78,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
           }}>
             2Secure
           </h2>
-          <span style={{
-            fontSize: '11px', color: 'rgba(203, 213, 225, 0.5)',
-            display: 'block', marginTop: '3px',
-          }}>
-            Vault déverrouillé
-          </span>
+          {username && (
+            <span style={{
+              fontSize: '11px', color: 'rgba(203, 213, 225, 0.5)',
+              display: 'flex', alignItems: 'center', gap: '4px', marginTop: '3px',
+            }}>
+              <User size={10} color="rgba(139,92,246,0.7)" />
+              {username}
+            </span>
+          )}
         </div>
       </div>
 

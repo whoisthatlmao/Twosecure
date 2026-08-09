@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { X, RefreshCw, Download, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, RefreshCw, Download, CheckCircle2, Sparkles } from 'lucide-react';
 import { check } from '@tauri-apps/plugin-updater';
+import { getVersion } from '@tauri-apps/api/app';
 import { useToast } from './Toast';
 
 interface UpdateModalProps {
@@ -15,54 +16,43 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, onClose }) => 
   const [downloading, setDownloading] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
   const [statusMessage, setStatusMessage] = useState<string>('');
+  const [currentVersion, setCurrentVersion] = useState<string>('...');
+  const [isUpToDate, setIsUpToDate] = useState(false);
+
+  useEffect(() => {
+    getVersion().then(v => setCurrentVersion(v)).catch(() => setCurrentVersion('?'));
+  }, []);
 
   const checkForUpdates = async () => {
     setChecking(true);
+    setIsUpToDate(false);
     setStatusMessage('Recherche de mises à jour...');
     try {
       const update = await check();
       if (update && update.available) {
         setUpdateAvailable(update);
-        setStatusMessage(`Nouvelle version ${update.version} disponible !`);
+        setStatusMessage(`Nouvelle version v${update.version} disponible !`);
+        showToast(`Mise à jour v${update.version} disponible !`, 'info');
       } else {
         setUpdateAvailable(null);
-        setStatusMessage('Vous utilisez déjà la dernière version disponible (v0.1.0).');
-        showToast('TwoSecure est à jour !', 'success');
+        setIsUpToDate(true);
+        setStatusMessage(`TwoSecure v${currentVersion} est déjà à jour.`);
+        showToast('✅ TwoSecure est à jour !', 'success');
       }
     } catch (err: any) {
-      console.error('Erreur de recherche de mise à jour:', err);
-      setStatusMessage('Le serveur de mise à jour n\'est pas encore disponible.');
+      const errMsg = err?.message || String(err) || 'Erreur inconnue';
+      setStatusMessage(`Erreur : ${errMsg}`);
+      showToast(`Erreur de mise à jour : ${errMsg}`, 'error');
     } finally {
       setChecking(false);
     }
   };
 
-  const simulateUpdateTest = () => {
-    setChecking(true);
-    setStatusMessage('Simuler la recherche de mises à jour...');
-    setTimeout(() => {
-      setChecking(false);
-      setUpdateAvailable({
-        version: '0.2.0',
-        body: '✨ Version v0.2.0 (Démonstration) ! Nouvelles fonctionnalités de sécurité et corrections incluses.',
-        downloadAndInstall: async (onEvent: any) => {
-          onEvent({ event: 'Started', data: { contentLength: 100 } });
-          for (let i = 10; i <= 100; i += 20) {
-            await new Promise((resolve) => setTimeout(resolve, 400));
-            onEvent({ event: 'Progress', data: { chunkLength: 20 } });
-          }
-          onEvent({ event: 'Finished' });
-        },
-      });
-      setStatusMessage('Nouvelle version v0.2.0 de test détectée !');
-      showToast('Version v0.2.0 (Démo) disponible !', 'info');
-    }, 1000);
-  };
-
   const handleInstallUpdate = async () => {
     if (!updateAvailable) return;
     setDownloading(true);
-    setStatusMessage('Téléchargement de la mise à jour en cours...');
+    setProgress(0);
+    setStatusMessage('Téléchargement de la mise à jour...');
     try {
       let downloaded = 0;
       let contentLength = 0;
@@ -79,16 +69,17 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, onClose }) => 
             }
             break;
           case 'Finished':
-            setStatusMessage('Installation terminée. Redémarrage de l\'application...');
+            setStatusMessage('Installation terminée. Redémarrage...');
+            setProgress(100);
             break;
         }
       });
 
-      showToast('Mise à jour simulée installée avec succès !', 'success');
+      showToast('Mise à jour installée ! Redémarrage en cours...', 'success');
     } catch (err: any) {
-      console.error('Erreur d\'installation de la mise à jour:', err);
-      setStatusMessage('Échec de l\'installation de la mise à jour.');
-      showToast(`Erreur d'installation: ${err?.message || err}`, 'error');
+      const errMsg = err?.message || String(err);
+      setStatusMessage(`Échec de l'installation : ${errMsg}`);
+      showToast(`Erreur d'installation : ${errMsg}`, 'error');
     } finally {
       setDownloading(false);
     }
@@ -129,7 +120,7 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, onClose }) => 
                 Mises à jour TwoSecure
               </h2>
               <span style={{ fontSize: '12px', color: 'rgba(203,213,225,0.5)' }}>
-                Tauri Updater automatique
+                Mise à jour automatique
               </span>
             </div>
           </div>
@@ -155,6 +146,7 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, onClose }) => 
           textAlign: 'center'
         }}>
           {updateAvailable ? (
+            /* ── Mise à jour disponible ── */
             <div>
               <div style={{
                 width: '48px', height: '48px', borderRadius: '50%',
@@ -167,7 +159,7 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, onClose }) => 
                 Nouvelle version v{updateAvailable.version} disponible !
               </h3>
               <p style={{ fontSize: '12.5px', color: 'rgba(203,213,225,0.6)', marginBottom: '16px' }}>
-                {updateAvailable.body || 'Mise à jour recommandée incluant des améliorations de sécurité et de performances.'}
+                {updateAvailable.body || 'Mise à jour recommandée incluant des améliorations de sécurité.'}
               </p>
 
               {downloading && progress !== null && (
@@ -194,64 +186,85 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({ isOpen, onClose }) => 
                 style={{
                   width: '100%', height: '42px', fontSize: '13.5px', fontWeight: 700,
                   color: '#ffffff',
-                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                  border: 'none', borderRadius: '12px', cursor: 'pointer',
+                  background: downloading
+                    ? 'rgba(16, 185, 129, 0.4)'
+                    : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                  border: 'none', borderRadius: '12px', cursor: downloading ? 'not-allowed' : 'pointer',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
                   boxShadow: '0 0 20px rgba(16, 185, 129, 0.35)',
+                  transition: 'all 0.2s',
                 }}
               >
                 {downloading ? <RefreshCw size={16} className="animate-spin" /> : <Download size={16} />}
-                <span>{downloading ? 'Installation...' : 'Télécharger et Installer'}</span>
+                <span>{downloading ? `Installation... ${progress ?? 0}%` : 'Télécharger et Installer'}</span>
+              </button>
+            </div>
+          ) : isUpToDate ? (
+            /* ── Déjà à jour ── */
+            <div>
+              <div style={{
+                width: '48px', height: '48px', borderRadius: '50%',
+                background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.35)',
+                margin: '0 auto 12px', display: 'flex', alignItems: 'center', justifyContent: 'center'
+              }}>
+                <CheckCircle2 size={24} color="#10b981" />
+              </div>
+              <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#10b981', marginBottom: '6px' }}>
+                Vous êtes à jour !
+              </h3>
+              <p style={{ fontSize: '12.5px', color: 'rgba(203,213,225,0.6)', marginBottom: '16px' }}>
+                TwoSecure v{currentVersion} est la dernière version disponible.
+              </p>
+              <button
+                onClick={checkForUpdates}
+                style={{
+                  width: '100%', height: '40px', fontSize: '13px', fontWeight: 600,
+                  color: 'rgba(203,213,225,0.7)',
+                  background: 'rgba(255,255,255,0.04)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: '12px', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                }}
+              >
+                <RefreshCw size={14} />
+                <span>Vérifier à nouveau</span>
               </button>
             </div>
           ) : (
+            /* ── État initial ── */
             <div>
               <div style={{
                 width: '48px', height: '48px', borderRadius: '50%',
                 background: 'rgba(168, 85, 247, 0.12)', border: '1px solid rgba(168, 85, 247, 0.3)',
                 margin: '0 auto 12px', display: 'flex', alignItems: 'center', justifyContent: 'center'
               }}>
-                <CheckCircle2 size={24} color="#c084fc" />
+                <Sparkles size={24} color="#c084fc" />
               </div>
               <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#ffffff', marginBottom: '6px' }}>
-                Version actuelle : v0.1.0
+                Version actuelle : v{currentVersion}
               </h3>
               <p style={{ fontSize: '12.5px', color: 'rgba(203,213,225,0.6)', marginBottom: '16px' }}>
-                {statusMessage || 'Cliquez sur le bouton ci-dessous pour rechercher les nouvelles versions.'}
+                {statusMessage || 'Cliquez pour rechercher de nouvelles versions.'}
               </p>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <button
-                  onClick={checkForUpdates}
-                  disabled={checking}
-                  style={{
-                    width: '100%', height: '42px', fontSize: '13.5px', fontWeight: 700,
-                    color: '#ffffff',
-                    background: 'linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)',
-                    border: 'none', borderRadius: '12px', cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                    boxShadow: '0 0 20px rgba(124, 58, 237, 0.35)',
-                  }}
-                >
-                  <RefreshCw size={16} className={checking ? 'animate-spin' : ''} />
-                  <span>{checking ? 'Vérification...' : 'Rechercher des mises à jour'}</span>
-                </button>
-
-                <button
-                  onClick={simulateUpdateTest}
-                  disabled={checking}
-                  style={{
-                    width: '100%', height: '36px', fontSize: '12px', fontWeight: 600,
-                    color: '#c084fc',
-                    background: 'rgba(168, 85, 247, 0.12)',
-                    border: '1px solid rgba(168, 85, 247, 0.3)',
-                    borderRadius: '10px', cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-                  }}
-                >
-                  <span>✨ Simuler une mise à jour v0.2.0 (Mode Test)</span>
-                </button>
-              </div>
+              <button
+                onClick={checkForUpdates}
+                disabled={checking}
+                style={{
+                  width: '100%', height: '42px', fontSize: '13.5px', fontWeight: 700,
+                  color: '#ffffff',
+                  background: checking
+                    ? 'rgba(124, 58, 237, 0.5)'
+                    : 'linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%)',
+                  border: 'none', borderRadius: '12px', cursor: checking ? 'not-allowed' : 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                  boxShadow: '0 0 20px rgba(124, 58, 237, 0.35)',
+                  transition: 'all 0.2s',
+                }}
+              >
+                <RefreshCw size={16} className={checking ? 'animate-spin' : ''} />
+                <span>{checking ? 'Vérification...' : 'Rechercher des mises à jour'}</span>
+              </button>
             </div>
           )}
         </div>
