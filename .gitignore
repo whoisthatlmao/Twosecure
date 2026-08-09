@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Clés de signature (ne jamais pousser sur GitHub !)
+.tauri/
+build-signed.ps1
