@@ -1,0 +1,10 @@
+/* App.css — styles complémentaires TwoSecure */
+/* Les styles principaux sont dans index.css */
+
+/* Overrides nécessaires pour Tauri/WebView */
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}

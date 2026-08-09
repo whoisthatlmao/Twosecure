@@ -1,0 +1,32 @@
+[package]
+name = "twosecure"
+version = "0.1.0"
+description = "TwoSecure - NextGen Encrypted Password & TOTP Manager"
+authors = ["Twosecure Team"]
+edition = "2021"
+
+[lib]
+name = "twosecure_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-opener = "2"
+tauri-plugin-updater = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+argon2 = "0.5"
+aes-gcm = "0.10"
+zeroize = { version = "1.8", features = ["derive"] }
+rand = "0.8"
+totp-rs = { version = "5.6", features = ["qr"] }
+base64 = "0.22"
+dirs = "6.0"
+reqwest = { version = "0.12", features = ["json"] }
+
+
+
+

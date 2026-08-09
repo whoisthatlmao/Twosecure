@@ -1,0 +1,308 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+  /* === OBSIDIAN & NEON GLOW COLOR PALETTE === */
+  --bg-main: #050508;
+  --bg-sidebar: rgba(10, 8, 18, 0.95);
+  --bg-card: rgba(15, 12, 26, 0.85);
+  --bg-card-hover: rgba(24, 18, 42, 0.95);
+  --bg-input: rgba(13, 10, 22, 0.85);
+  --bg-overlay: rgba(4, 3, 8, 0.92);
+
+  /* === BORDERS WITH VIBRANT NEON GLOW === */
+  --border-subtle: rgba(139, 92, 246, 0.25);
+  --border-hover: rgba(168, 85, 247, 0.5);
+  --border-focus: rgba(168, 85, 247, 0.8);
+
+  /* === VIOLET & INDIGO ACCENTS === */
+  --accent-primary: #a855f7;
+  --accent-secondary: #7c3aed;
+  --accent-dark: #1e102a;
+  --accent-glow: rgba(168, 85, 247, 0.35);
+
+  /* === STATUS COLORS === */
+  --accent-green: #10b981;
+  --accent-red: #ef4444;
+  --accent-warning: #f59e0b;
+
+  /* === HIGH CONTRAST TYPOGRAPHY === */
+  --text-primary: #ffffff;
+  --text-secondary: #e2e8f0;
+  --text-muted: #94a3b8;
+
+  /* === FONTS === */
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* === HIGH CONTRAST GRADIENTS === */
+  --gradient-brand: linear-gradient(135deg, #a855f7 0%, #6366f1 100%);
+  --gradient-btn: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
+  --gradient-text: linear-gradient(180deg, #ffffff 0%, #f3e8ff 50%, #c084fc 100%);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: var(--font-sans);
+  user-select: none;
+}
+
+/* TOTAL GLOBAL DARK BACKGROUND — OVERRIDES ALL DEFAULT LIGHT THEMES */
+html, body, #root, main, aside, div, header, section, button, input {
+  background-color: transparent;
+}
+
+html, body {
+  background-color: #050508 !important;
+  color: var(--text-primary) !important;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden !important;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(168, 85, 247, 0.25) 0%, transparent 70%),
+    radial-gradient(circle at 15% 85%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
+    radial-gradient(circle at 85% 80%, rgba(139, 92, 246, 0.15) 0%, transparent 50%) !important;
+}
+
+#root {
+  height: 100vh;
+  width: 100vw;
+  display: flex;
+  background-color: #050508 !important;
+  overflow: hidden !important;
+}
+
+/* ============================
+   ABSOLUTE REMOVAL OF ALL SCROLLBARS / SLIDE BARS
+   ============================ */
+::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+}
+
+::-webkit-scrollbar-thumb,
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner,
+::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+}
+
+* {
+  -ms-overflow-style: none !important;  /* IE and Edge */
+  scrollbar-width: none !important;  /* Firefox */
+}
+
+/* Utility class for scrollable containers */
+.no-scrollbar {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* ============================
+   OBSIDIAN GLASS PANEL
+   ============================ */
+.glass-panel {
+  background: rgba(15, 12, 26, 0.82) !important;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(168, 85, 247, 0.25) !important;
+  border-radius: 20px;
+  box-shadow: 0 0 30px rgba(168, 85, 247, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  transition: all 0.3s ease-in-out;
+}
+
+/* ============================
+   GRADIENT TEXT WITH HIGH VISIBILITY
+   ============================ */
+.gradient-text {
+  background: var(--gradient-text);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 2px 8px rgba(168, 85, 247, 0.4));
+}
+
+/* ============================
+   PRIMARY GRADIENT BUTTON
+   ============================ */
+.gradient-btn {
+  background: var(--gradient-btn) !important;
+  color: #ffffff !important;
+  font-weight: 700;
+  font-size: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  border-radius: 9999px;
+  padding: 12px 24px;
+  cursor: pointer;
+  transition: all 0.3s ease-in-out;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 0 25px rgba(124, 58, 237, 0.45);
+}
+
+.gradient-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 35px rgba(168, 85, 247, 0.65), 0 0 12px rgba(168, 85, 247, 0.4);
+  background: linear-gradient(135deg, #a855f7 0%, #6366f1 100%) !important;
+}
+
+.gradient-btn:active {
+  transform: translateY(0);
+}
+
+.gradient-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* ============================
+   SECONDARY BUTTON - FORCE DARK OBSIDIAN VIOLET (NO WHITE)
+   ============================ */
+.secondary-btn {
+  background: rgba(168, 85, 247, 0.18) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(168, 85, 247, 0.4) !important;
+  border-radius: 9999px;
+  padding: 10px 20px;
+  font-weight: 600;
+  font-size: 13.5px;
+  cursor: pointer;
+  transition: all 0.3s ease-in-out;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 0 15px rgba(168, 85, 247, 0.15) !important;
+}
+
+.secondary-btn:hover {
+  background: rgba(168, 85, 247, 0.35) !important;
+  border-color: rgba(168, 85, 247, 0.7) !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 25px rgba(168, 85, 247, 0.4) !important;
+}
+
+/* Force overrides for native browser default button backgrounds */
+button {
+  background-color: transparent;
+  color: inherit;
+  border: none;
+}
+
+/* ============================
+   INPUT FIELDS WITH HIGH CONTRAST & NO WHITE
+   ============================ */
+.input-field {
+  width: 100%;
+  background: rgba(8, 6, 16, 0.85) !important;
+  border: 1px solid rgba(139, 92, 246, 0.3) !important;
+  border-radius: 12px;
+  padding: 12px 16px;
+  color: #ffffff !important;
+  font-size: 13.5px;
+  outline: none;
+  transition: all 0.25s ease-in-out;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.input-field:focus {
+  border-color: rgba(168, 85, 247, 0.75) !important;
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.2), 0 0 20px rgba(168, 85, 247, 0.25) !important;
+  background: rgba(15, 11, 28, 0.95) !important;
+}
+
+.input-field::placeholder {
+  color: rgba(203, 213, 225, 0.4) !important;
+}
+
+/* Force dark background on browser autocomplete/autofill */
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus {
+  -webkit-text-fill-color: #ffffff !important;
+  -webkit-box-shadow: 0 0 0px 1000px #0d0a16 inset !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+/* ============================
+   ANIMATIONS
+   ============================ */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-in-out forwards;
+}
+
+.pulse-glow {
+  animation: pulseGlow 2.5s infinite ease-in-out;
+}
+
+@keyframes pulseGlow {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5); }
+  50%       { opacity: 0.6; box-shadow: 0 0 10px 3px rgba(16, 185, 129, 0.3); }
+}
+
+/* Custom Checkbox & Range */
+input[type="range"] {
+  accent-color: #a855f7;
+  cursor: pointer;
+}
+
+input[type="checkbox"] {
+  accent-color: #a855f7;
+}
+
+/* ============================
+   TOAST NOTIFICATIONS
+   ============================ */
+@keyframes toastSlideIn {
+  from { opacity: 0; transform: translateX(60px) scale(0.92); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+@keyframes toastSlideOut {
+  from { opacity: 1; transform: translateX(0) scale(1); }
+  to   { opacity: 0; transform: translateX(60px) scale(0.9); }
+}
+
+/* ============================
+   AUTO-LOCK PROGRESS BAR
+   ============================ */
+@keyframes progressShrink {
+  from { width: 100%; }
+  to   { width: 0%; }
+}
+
+/* ============================
+   CARD NUMBER FIELD - mono spacing
+   ============================ */
+.card-number-field {
+  letter-spacing: 3px;
+  font-family: var(--font-mono);
+}
