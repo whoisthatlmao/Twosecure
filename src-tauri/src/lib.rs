@@ -7,7 +7,7 @@ use tauri::{State, Manager};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{TrayIconBuilder, TrayIconEvent, MouseButtonState, MouseButton};
 
-use vault::{VaultData, VaultEntry, TotpResponse, vault_exists, save_vault, load_vault, generate_totp_code, get_current_timestamp, export_vault_to_file, import_vault_from_file};
+use vault::{VaultData, VaultEntry, TotpResponse, vault_exists, save_vault, save_vault_with_recovery, load_vault, generate_totp_code, get_current_timestamp, export_vault_to_file, import_vault_from_file};
 use crypto::{MasterKey, derive_key, generate_secure_password};
 use telegram::{TelegramConfig, send_telegram_auth_prompt, send_linking_code, send_telegram_message, poll_telegram_approval, TelegramAuthStatus, DEFAULT_BOT_TOKEN, DEFAULT_CHAT_ID};
 
@@ -32,7 +32,7 @@ fn get_username() -> String {
 }
 
 #[tauri::command]
-fn create_vault(state: State<'_, AppState>, master_password: String) -> Result<String, String> {
+fn create_vault(state: State<'_, AppState>, master_password: String, recovery_phrase: Option<String>) -> Result<String, String> {
     if vault_exists() {
         return Err("Le coffre-fort existe déjà sur cette machine".to_string());
     }
@@ -41,10 +41,11 @@ fn create_vault(state: State<'_, AppState>, master_password: String) -> Result<S
         return Err("Le mot de passe maître doit comporter au moins 8 caractères".to_string());
     }
 
+    // 1. Toujours dériver la clé principale du mot de passe maître
     let (master_key, salt) = derive_key(&master_password, None)?;
     let initial_vault = VaultData::default();
 
-    save_vault(&initial_vault, &master_key, &salt)?;
+    save_vault_with_recovery(&initial_vault, &master_key, &salt, recovery_phrase.as_deref())?;
 
     *state.master_key.lock().unwrap() = Some(master_key);
     *state.salt.lock().unwrap() = Some(salt);
@@ -461,19 +462,42 @@ fn change_master_password(
         return Err("Le nouveau mot de passe maître doit comporter au moins 8 caractères".to_string());
     }
 
-    // Vérifier le mot de passe actuel en chargeant les données du coffre
     let (vault_data, _old_key, _old_salt) = load_vault(&current_password)?;
-
-    // Dériver la nouvelle clé et le sel
     let (new_key, new_salt) = derive_key(&new_password, None)?;
 
-    // Rechiffrer et enregistrer le coffre avec la nouvelle clé
     save_vault(&vault_data, &new_key, &new_salt)?;
 
-    // Mettre à jour l'état en mémoire
     *state.master_key.lock().unwrap() = Some(new_key);
     *state.salt.lock().unwrap() = Some(new_salt);
     *state.vault_data.lock().unwrap() = Some(vault_data);
+
+    Ok(())
+}
+
+#[tauri::command]
+fn force_reset_master_password(
+    state: State<'_, AppState>,
+    _new_password: String,
+    recovery_phrase: Option<String>,
+) -> Result<(), String> {
+    if _new_password.len() < 8 {
+        return Err("Le nouveau mot de passe maître doit comporter au moins 8 caractères".to_string());
+    }
+
+    let mut vault_guard = state.vault_data.lock().unwrap();
+    let vault_data = vault_guard
+        .as_ref()
+        .cloned()
+        .ok_or_else(|| "Coffre-fort non déverrouillé en mémoire".to_string())?;
+
+    // Dériver la nouvelle clé principale directement depuis le NOUVEAU MOT DE PASSE MAÎTRE
+    let (new_key, new_salt) = derive_key(&_new_password, None)?;
+
+    save_vault_with_recovery(&vault_data, &new_key, &new_salt, recovery_phrase.as_deref())?;
+
+    *state.master_key.lock().unwrap() = Some(new_key);
+    *state.salt.lock().unwrap() = Some(new_salt.clone());
+    *vault_guard = Some(vault_data);
 
     Ok(())
 }
@@ -579,6 +603,7 @@ pub fn run() {
             unlink_telegram,
             reset_vault,
             change_master_password,
+            force_reset_master_password,
             get_username,
         ])
         .run(tauri::generate_context!())

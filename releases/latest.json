@@ -1,11 +1,11 @@
 {
-  "version": "0.2.0",
-  "notes": "TwoSecure v0.2.0 - Mise à jour majeure :\n- Icône dans la barre des tâches (tray icon)\n- Système de mise à jour automatique\n- Changement du mot de passe maître\n- Configuration Telegram optionnelle\n- Audit de sécurité amélioré (exclusion cartes bancaires)\n- Notifications modales personnalisées\n- Correction de divers bugs",
-  "pub_date": "2026-08-09T18:16:00Z",
+  "version": "0.2.4",
+  "notes": "TwoSecure v0.2.4 - Mise à jour majeure :\n- Icône dans la barre des tâches (tray icon)\n- Système de mise à jour automatique\n- Changement du mot de passe maître\n- Configuration Telegram optionnelle\n- Audit de sécurité amélioré (exclusion cartes bancaires)\n- Notifications modales personnalisées\n- Correction de divers bugs",
+  "pub_date": "2026-08-10T23:41:48Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUTUV1aVh6UlhDOWxGZVExVWZOM2pZOVIyeFEyRk54MzdSLzgwS2Vsd2FBWUJUeHBXOEh1RENuWDcybWtVcmNDaXdvMUZ2Ym42RmdzOHdmaEFQM1pFWHZhK0R2MWU0N2d3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg2Mjk5MzY3CWZpbGU6VHdvU2VjdXJlXzAuMi4wX3g2NC1zZXR1cC5leGUKMmZsc0JjWUNNMFJraHhDcHZxL3FRL1RuUE1ZRldhdzFVVVJqTktoLzl0WDlQY29Xa3liSW5wOHJ1bjBJNzU1RVpKeEpjeElwTDVlelZKdUJpZURQREE9PQo=",
-      "url": "https://github.com/whoisthatlmao/Twosecure/releases/download/v0.2.0/TwoSecure_0.2.0_x64-setup.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUTUV1aVh6UlhDOW5Ubkg2aHdUQU5GSWY0cEJTUlRSemxwR0l1T2dtMG1uZnNJVlA4VGxJckgxYi8xK0pxT0RSN0xjTGp3ZmNacU5ndG5wZ0kvOHVYMGx5NGl4a1Fqd1FZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg2Mzk4MDQ0CWZpbGU6VHdvU2VjdXJlXzAuMi40X3g2NC1zZXR1cC5leGUKUmtSaUNJNVFlTno0cHVOUVZQd0pvcWZ3MkhYaWJ5dEwzemY3M3BsaG94dVVBZ1JPME9YNEpZR2hXbmZoUjVZTlR6N0N0ZEZiVHBROUI1bDZlTFJzQ1E9PQo=",
+      "url": "https://github.com/whoisthatlmao/Twosecure/releases/download/v0.2.4/TwoSecure_0.2.4_x64-setup.exe"
     }
   }
 }

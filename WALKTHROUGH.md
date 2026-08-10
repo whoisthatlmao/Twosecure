@@ -72,3 +72,36 @@ Twosecure/
 │       ├── ConfirmModal.tsx         ← Boîte de dialogue de confirmation moderne en verre néon
 │       ├── UpdateModal.tsx          ← Recherche et installation des mises à jour Tauri
 │       └── Toast.tsx                
+
+
+
+
+📑 Walkthrough & Compte-Rendu de Session — TwoSecure
+Date : 10 août 2026
+Projet : TwoSecure (Gestionnaire de mots de passe 100% local — Tauri 2 / Rust / React)
+État du build : v0.2.3 généré avec succès (TwoSecure_0.2.3_x64-setup.exe & signatures .sig)
+
+🎯 Travaux Accomplis Pendant la Session
+1. ⚙️ Système de Mise à Jour Automatique (Tauri Updater v2)
+Configuration : createUpdaterArtifacts: true dans tauri.conf.json, permissions ACL ajoutées (updater:default, updater:allow-check, updater:allow-download-and-install dans capabilities/default.json).
+Signature & Clé Minisign : Clé base64 configurée correctement dans build-signed.ps1 (259-348 chars). Génération automatique des fichiers .nsis.zip et .sig.
+Fichier Release : Génération du fichier releases/latest.json avec la signature cryptographique v0.2.0 et l'URL GitHub Releases.
+UI UpdateModal : Version affichée dynamiquement via getVersion(), bouton de simulation supprimé, état "À jour" nettoyé avec icône verte et messages d'erreur détaillés.
+2. 🎨 Design, UX & Customisation
+Nouveau Logo : Généré aux couleurs du thème (shield avec dégradé violet/indigo #a855f7 → #6366f1). Toutes les icônes de l'app (.ico, .icns, .png 32x32 à 512x512) régénérées.
+Nom d'utilisateur Système : Commande Rust get_username ajoutée pour lire %USERNAME% (ou $USER) et l'afficher sous le titre "2Secure" dans la Sidebar.
+Titlebar sombre : "theme": "Dark" configuré dans tauri.conf.json pour avoir la barre de titre native noire### 🟢 Double Déchiffrement Opérationnel (Mot de Passe Maître + Mots de Secours)
+- **Architecture de Conteneur** : `VaultContainer` contient l'ensemble du coffre-fort chiffré par la clé maître principale, ainsi que `recovery_payload` qui contient les 32 octets de la clé maître chiffrée par la clé dérivée d'Argon2id de la phrase de secours (ex: `QUANTUM COBALT 428`).
+- **Validation** : Les deux clés permettent de déverrouiller le coffre directement de manière totalement indépendante et simultanée sans s'écraser. Les tests unitaires Cargo ont validé le déchiffrement direct et formaté.
+- **Formulaire de saisie** : Tolérance native des majuscules, minuscules, espaces et tirets lors du déverrouillage.de redéfinition du mot de passe maître.
+src/components/RecoveryKeyModal.tsx
+ : Fenêtre d'affichage du code de secours avec bouton copier et confirmation obligatoire.
+src/components/Sidebar.tsx
+ : Affichage du nom d'utilisateur Windows.
+README.md
+ : Documentation complète du projet.
+😴 À reprendre demain
+Ouvrir le projet et consulter ce walkthrough.md.
+Finaliser le double déchiffrement (Mot de Passe Maître + Phrase de Secours duale).
+Tester la création d'un coffre neuf, le déverrouillage standard, et la récupération d'urgence.
+Bonne nuit et à demain ! 🌙✨
