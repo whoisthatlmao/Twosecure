@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Lock, AlertCircle, Sparkles, Eye, EyeOff, KeyRound } from 'lucide-react';
+import { Lock, AlertCircle, Sparkles, Eye, EyeOff, KeyRound, Send } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { TelegramAuthModal } from './TelegramAuthModal';
 import { TelegramSetupModal } from './TelegramSetupModal';
@@ -16,7 +16,16 @@ export const VaultLock: React.FC<VaultLockProps> = ({ isInitialized, onUnlocked 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showPass, setShowPass] = useState(false);
-  const [telegramFlow, setTelegramFlow] = useState<'none' | 'setup' | 'approval'>('none');
+  const [telegramFlow, setTelegramFlow] = useState<'none' | 'setup' | 'approval' | 'approval_passwordless'>('none');
+  const [telegramHintLinked, setTelegramHintLinked] = useState(false);
+
+  React.useEffect(() => {
+    invoke('get_telegram_hint')
+      .then((res) => {
+        if (res) setTelegramHintLinked(true);
+      })
+      .catch(() => {});
+  }, []);
 
   // Recovery Code state
   const [generatedPhrase, setGeneratedPhrase] = useState<string | null>(null);
@@ -423,6 +432,43 @@ export const VaultLock: React.FC<VaultLockProps> = ({ isInitialized, onUnlocked 
                   </>
                 )}
               </button>
+
+              {/* Telegram Passwordless Button */}
+              {!showForgotNotice && isInitialized && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (telegramHintLinked) {
+                      setTelegramFlow('approval_passwordless');
+                    } else {
+                      setError("Vous devez d'abord lier votre compte Telegram dans les paramètres (menu Sécurité & 2FA) pour utiliser le déverrouillage sans mot de passe.");
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    justifyContent: 'center',
+                    marginTop: '4px',
+                    padding: '14px',
+                    fontSize: '14.5px',
+                    fontWeight: 600,
+                    color: '#ffffff',
+                    background: 'linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%)',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    borderRadius: '9999px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    transition: 'transform 0.2s, boxShadow 0.2s',
+                    boxShadow: '0 0 15px rgba(37, 99, 235, 0.4)',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 0 25px rgba(37, 99, 235, 0.6)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 0 15px rgba(37, 99, 235, 0.4)'; }}
+                >
+                  <Send size={16} />
+                  <span>Déverrouiller via Telegram</span>
+                </button>
+              )}
             </form>
           )}
 
@@ -508,7 +554,8 @@ export const VaultLock: React.FC<VaultLockProps> = ({ isInitialized, onUnlocked 
 
       {/* ── Telegram Auth Modal (2FA check on unlock) ── */}
       <TelegramAuthModal
-        isOpen={telegramFlow === 'approval'}
+        isOpen={telegramFlow === 'approval' || telegramFlow === 'approval_passwordless'}
+        isPasswordless={telegramFlow === 'approval_passwordless'}
         onApproved={() => {
           setTelegramFlow('none');
           onUnlocked();

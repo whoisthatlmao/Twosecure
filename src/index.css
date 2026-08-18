@@ -255,6 +255,37 @@ textarea:-webkit-autofill:focus {
   to   { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes grabPop {
+  0% {
+    transform: rotate(0deg) scale(0.9);
+    opacity: 0.5;
+  }
+  100% {
+    transform: rotate(2.5deg) scale(1.06);
+    opacity: 1;
+  }
+}
+
+.ghost-card-grabbed {
+  animation: grabPop 0.18s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+/* Dragging active on dropzones */
+body.is-dragging [data-dropzone] {
+  transition: all 0.2s ease-in-out !important;
+}
+
+body.is-dragging [data-dropzone].drag-over {
+  border-color: #a855f7 !important;
+  background: rgba(168, 85, 247, 0.15) !important;
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.35) !important;
+  transform: scale(1.02) !important;
+}
+
+body.is-dragging * {
+  cursor: grabbing !important;
+}
+
 .animate-fade-in {
   animation: fadeIn 0.3s ease-in-out forwards;
 }
@@ -305,4 +336,15 @@ input[type="checkbox"] {
 .card-number-field {
   letter-spacing: 3px;
   font-family: var(--font-mono);
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes progressIndeterminate {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(25%); }
+  100% { transform: translateX(200%); }
 }

@@ -26,6 +26,8 @@ totp-rs = { version = "5.6", features = ["qr"] }
 base64 = "0.22"
 dirs = "6.0"
 reqwest = { version = "0.12", features = ["json"] }
+tauri-plugin-dialog = "2.7.2"
+tokio = { version = "1", features = ["rt-multi-thread"] }
 
 
 

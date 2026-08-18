@@ -5,13 +5,14 @@ import { invoke } from '@tauri-apps/api/core';
 
 interface TelegramAuthModalProps {
   isOpen: boolean;
+  isPasswordless?: boolean;
   onApproved: () => void;
   onDenied: () => void;
   onCancel: () => void;
 }
 
 export const TelegramAuthModal: React.FC<TelegramAuthModalProps> = ({
-  isOpen, onApproved, onDenied, onCancel,
+  isOpen, isPasswordless = false, onApproved, onDenied, onCancel,
 }) => {
   const [authCode, setAuthCode] = useState('');
   const [secondsLeft, setSecondsLeft] = useState(60);
@@ -26,20 +27,29 @@ export const TelegramAuthModal: React.FC<TelegramAuthModalProps> = ({
     setSecondsLeft(60);
     setErrorMsg('');
 
-    // Generate session random auth code
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    setAuthCode(code);
-
     try {
-      // Send Telegram push prompt
-      await invoke('send_telegram_prompt', { authCode: code });
+      let code = '';
+      if (isPasswordless) {
+        code = await invoke('initiate_telegram_unlock');
+        setAuthCode(code);
+      } else {
+        // Generate session random auth code
+        code = Math.floor(100000 + Math.random() * 900000).toString();
+        setAuthCode(code);
+        // Send Telegram push prompt
+        await invoke('send_telegram_prompt', { authCode: code });
+      }
+      
       setStatus('pending');
 
       // Start polling status every 1.5s
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
       pollIntervalRef.current = setInterval(async () => {
         try {
-          const res: string = await invoke('check_telegram_prompt', { authCode: code });
+          const res: string = isPasswordless 
+            ? await invoke('check_telegram_unlock')
+            : await invoke('check_telegram_prompt', { authCode: code });
+            
           if (res === 'approved') {
             clearInterval(pollIntervalRef.current!);
             clearInterval(countdownIntervalRef.current!);

@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { X, Key, CreditCard, FileText, RefreshCw, Eye, EyeOff } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
-import { VaultEntry, EntryCategory } from '../types';
+import { VaultEntry, VaultGroup, EntryCategory } from '../types';
 import { PasswordStrengthBar } from './PasswordStrengthBar';
 
 interface EntryModalProps {
   isOpen: boolean;
   entryToEdit?: VaultEntry | null;
+  groups?: VaultGroup[];
   onClose: () => void;
   onSave: (entry: VaultEntry) => void;
 }
@@ -18,7 +19,7 @@ const CATEGORIES = [
 ];
 
 export const EntryModal: React.FC<EntryModalProps> = ({
-  isOpen, entryToEdit, onClose, onSave,
+  isOpen, entryToEdit, groups = [], onClose, onSave,
 }) => {
   const [title, setTitle]           = useState('');
   const [username, setUsername]     = useState('');
@@ -28,6 +29,7 @@ export const EntryModal: React.FC<EntryModalProps> = ({
   const [totpSecret, setTotpSecret] = useState('');
   const [notes, setNotes]           = useState('');
   const [category, setCategory]     = useState<EntryCategory>('Password');
+  const [groupId, setGroupId]       = useState<string>('');
 
   // Dedicated card fields
   const [cardHolder, setCardHolder] = useState('');
@@ -45,6 +47,7 @@ export const EntryModal: React.FC<EntryModalProps> = ({
       setTotpSecret(entryToEdit.totp_secret || '');
       setNotes(entryToEdit.notes || '');
       setCategory(entryToEdit.category === 'Totp' ? 'Password' : entryToEdit.category);
+      setGroupId(entryToEdit.group_id || '');
       setCardHolder(entryToEdit.card_holder || '');
       setCardNumber(entryToEdit.card_number || '');
       setCardExpiry(entryToEdit.card_expiry || '');
@@ -53,6 +56,7 @@ export const EntryModal: React.FC<EntryModalProps> = ({
       setTitle(''); setUsername(''); setPassword('');
       setUrl(''); setTotpSecret(''); setNotes('');
       setCategory('Password');
+      setGroupId('');
       setCardHolder(''); setCardNumber(''); setCardExpiry(''); setCardCvv('');
     }
     setShowPassword(false);
@@ -104,6 +108,7 @@ export const EntryModal: React.FC<EntryModalProps> = ({
       card_number: category === 'Card' && cardNumber  ? cardNumber  : undefined,
       card_expiry: category === 'Card' && cardExpiry  ? cardExpiry  : undefined,
       card_cvv:    category === 'Card' && cardCvv     ? cardCvv     : undefined,
+      group_id:    groupId || undefined,
     };
     onSave(entry);
     onClose();
@@ -224,6 +229,26 @@ export const EntryModal: React.FC<EntryModalProps> = ({
               style={inputStyle}
             />
           </div>
+
+          {/* Group Selector */}
+          {groups.length > 0 && (
+            <div>
+              {fieldLabel('Groupe (Optionnel)')}
+              <select
+                className="input-field"
+                value={groupId}
+                onChange={(e) => setGroupId(e.target.value)}
+                style={{ ...inputStyle, cursor: 'pointer' }}
+              >
+                <option value="">Aucun groupe (Affiché dans la liste générale)</option>
+                {groups.map(g => (
+                  <option key={g.id} value={g.id}>
+                    {g.icon} {g.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* ════════ CARD FIELDS ════════ */}
           {category === 'Card' && (

@@ -42,7 +42,12 @@
 - **Notes sécurisées** — notes privées chiffrées
 - **2FA TOTP** — codes OTP intégrés dans les entrées de mots de passe
 - **Favoris** — accès rapide à vos entrées importantes
-- **Corbeille** — suppression sécurisée avec restauration possible
+- **Corbeille des entrées** — suppression sécurisée avec restauration possible
+
+### 🗄️ File Locker (Chiffrement de Fichiers)
+- **Chiffrement local de fichiers** — Sécurisez n'importe quel fichier lourd avec AES-256-GCM.
+- **Performances Asynchrones** — Les opérations de chiffrement/déchiffrement se font en tâche de fond (Threads Rust) pour garantir la fluidité de l'interface avec une **barre de progression en temps réel (0-100%)**.
+- **Corbeille dédiée** — Soft-delete pour récupérer vos fichiers chiffrés effacés par erreur avant suppression définitive.
 
 ### 🔍 Audit de sécurité
 - Détection des mots de passe **faibles** (entropie < 50 bits)

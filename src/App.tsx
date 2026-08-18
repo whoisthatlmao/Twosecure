@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { VaultEntry } from './types';
+import { VaultEntry, VaultGroup } from './types';
 import { VaultLock } from './components/VaultLock';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
@@ -13,6 +13,8 @@ import { SecurityAuditModal } from './components/SecurityAuditModal';
 import { SettingsModal } from './components/SettingsModal';
 import { UpdateModal } from './components/UpdateModal';
 import { TelegramSetupModal } from './components/TelegramSetupModal';
+import { GroupManagerModal } from './components/GroupManagerModal';
+import { FileLockerModal } from './components/FileLockerModal';
 import { useToast } from './components/Toast';
 import { useAutoLock } from './hooks/useAutoLock';
 
@@ -21,6 +23,7 @@ export function App() {
   const [isInitialized, setIsInitialized] = useState<boolean | null>(null);
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [entries, setEntries] = useState<VaultEntry[]>([]);
+  const [groups, setGroups] = useState<VaultGroup[]>([]);
   const [currentCategory, setCurrentCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -34,6 +37,8 @@ export function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isUpdateOpen, setIsUpdateOpen] = useState(false);
   const [isTelegramSetupOpen, setIsTelegramSetupOpen] = useState(false);
+  const [isGroupManagerOpen, setIsGroupManagerOpen] = useState(false);
+  const [isLockerOpen, setIsLockerOpen] = useState(false);
 
   const checkStatus = async () => {
     try {
@@ -49,13 +54,75 @@ export function App() {
     try {
       const loaded: VaultEntry[] = await invoke('get_entries');
       setEntries(loaded);
+      const loadedGroups: VaultGroup[] = await invoke('get_groups');
+      setGroups(loadedGroups);
     } catch (err) {
-      console.error('Erreur chargement entrées:', err);
+      console.error('Erreur chargement entrées/groupes:', err);
     }
   };
 
   useEffect(() => {
     checkStatus();
+    
+    // Disable default browser context menu globally
+    const handleContextMenu = (e: MouseEvent) => e.preventDefault();
+    document.addEventListener('contextmenu', handleContextMenu);
+    return () => {
+      document.removeEventListener('contextmenu', handleContextMenu);
+    };
+  }, []);
+
+  // Zoom / de-zoom with Ctrl + scroll or Ctrl + (+/-)
+  useEffect(() => {
+    const savedZoom = localStorage.getItem('twosecure-zoom');
+    let currentZoom = savedZoom ? parseFloat(savedZoom) : 1.0;
+
+    const applyZoom = (level: number) => {
+      const clamped = Math.max(0.5, Math.min(1.8, level));
+      currentZoom = clamped;
+      document.documentElement.style.zoom = ''; // Clean up direct root zoom
+      document.documentElement.style.setProperty('--content-zoom', clamped.toString());
+      
+      // Calculate font scale compensation factor (keep text legible by limiting its minimum scale on screen)
+      const minRatio = 0.82; // Don't let rendered text size go below 82% of original size
+      const compFactor = Math.max(minRatio, clamped) / clamped;
+      document.documentElement.style.setProperty('--zoom-font-comp', compFactor.toFixed(3));
+      
+      localStorage.setItem('twosecure-zoom', clamped.toFixed(2));
+    };
+
+    applyZoom(currentZoom);
+
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey) {
+        e.preventDefault();
+        const delta = e.deltaY < 0 ? 0.05 : -0.05;
+        applyZoom(currentZoom + delta);
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey) {
+        if (e.key === '+' || e.key === '=') {
+          e.preventDefault();
+          applyZoom(currentZoom + 0.05);
+        } else if (e.key === '-') {
+          e.preventDefault();
+          applyZoom(currentZoom - 0.05);
+        } else if (e.key === '0') {
+          e.preventDefault();
+          applyZoom(1.0);
+        }
+      }
+    };
+
+    window.addEventListener('wheel', handleWheel, { passive: false });
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('wheel', handleWheel);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, []);
 
   useEffect(() => {
@@ -69,6 +136,7 @@ export function App() {
       await invoke('lock_vault');
       setIsUnlocked(false);
       setEntries([]);
+      setGroups([]);
       showToast('Coffre-fort verrouillé avec succès', 'info', 3000);
     } catch (err) {
       console.error('Erreur verrouillage:', err);
@@ -80,6 +148,7 @@ export function App() {
       await invoke('reset_vault');
       setIsUnlocked(false);
       setEntries([]);
+      setGroups([]);
       showToast('Coffre-fort réinitialisé. Vous pouvez créer un nouveau coffre.', 'info', 5000);
       await checkStatus();
     } catch (err: any) {
@@ -182,7 +251,8 @@ export function App() {
       item.title.toLowerCase().includes(query) ||
       item.username.toLowerCase().includes(query) ||
       item.url.toLowerCase().includes(query) ||
-      (item.card_holder && item.card_holder.toLowerCase().includes(query));
+      (item.card_holder && item.card_holder.toLowerCase().includes(query)) ||
+      (item.notes && item.notes.toLowerCase().includes(query));
 
     return matchesCategory && matchesSearch;
   });
@@ -208,6 +278,8 @@ export function App() {
         onOpenTrash={() => setIsTrashOpen(true)}
         onOpenAudit={() => setIsAuditOpen(true)}
         onOpenUpdate={() => setIsUpdateOpen(true)}
+        groups={groups}
+        onOpenLocker={() => setIsLockerOpen(true)}
       />
 
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: '#050508' }}>
@@ -223,18 +295,22 @@ export function App() {
 
         <EntryList
           entries={filteredEntries}
+          groups={groups}
           onEdit={(entry) => {
             setEntryToEdit(entry);
             setIsModalOpen(true);
           }}
           onDelete={handleDeleteEntry}
           onToggleFavorite={handleToggleFavorite}
+          onOpenGroupManager={() => setIsGroupManagerOpen(true)}
+          onEntriesChanged={loadEntries}
         />
       </main>
 
       <EntryModal
         isOpen={isModalOpen}
         entryToEdit={entryToEdit}
+        groups={groups}
         onClose={() => {
           setIsModalOpen(false);
           setEntryToEdit(null);
@@ -288,6 +364,18 @@ export function App() {
           setIsTelegramSetupOpen(false);
           showToast('Compte Telegram associé avec succès !', 'success');
         }}
+      />
+
+      <GroupManagerModal
+        isOpen={isGroupManagerOpen}
+        onClose={() => setIsGroupManagerOpen(false)}
+        groups={groups}
+        onGroupsChanged={loadEntries}
+      />
+
+      <FileLockerModal
+        isOpen={isLockerOpen}
+        onClose={() => setIsLockerOpen(false)}
       />
     </div>
   );

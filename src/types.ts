@@ -1,5 +1,12 @@
 export type EntryCategory = 'Password' | 'Totp' | 'Card' | 'Note';
 
+export interface VaultGroup {
+  id: string;
+  name: string;
+  color: string;
+  icon: string;
+}
+
 export interface VaultEntry {
   id: string;
   title: string;
@@ -17,10 +24,10 @@ export interface VaultEntry {
   card_number?: string;
   card_expiry?: string;
   card_cvv?: string;
+  group_id?: string;
 }
 
 export interface TotpResponse {
   code: string;
   seconds_remaining: number;
 }
-

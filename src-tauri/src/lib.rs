@@ -1,5 +1,6 @@
 mod crypto;
 mod vault;
+mod locker;
 pub mod telegram;
 
 use std::sync::Mutex;
@@ -7,9 +8,21 @@ use tauri::{State, Manager};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{TrayIconBuilder, TrayIconEvent, MouseButtonState, MouseButton};
 
-use vault::{VaultData, VaultEntry, TotpResponse, vault_exists, save_vault, save_vault_with_recovery, load_vault, generate_totp_code, get_current_timestamp, export_vault_to_file, import_vault_from_file};
+use vault::{
+    VaultData, VaultEntry, VaultGroup, TotpResponse,
+    vault_exists, save_vault, save_vault_with_recovery, load_vault, load_vault_with_master_key,
+    generate_totp_code, get_current_timestamp,
+    export_vault_to_file, import_vault_from_file,
+    write_telegram_hint, read_telegram_hint, delete_telegram_hint_files,
+    write_telegram_master_key, read_telegram_master_key,
+};
 use crypto::{MasterKey, derive_key, generate_secure_password};
-use telegram::{TelegramConfig, send_telegram_auth_prompt, send_linking_code, send_telegram_message, poll_telegram_approval, TelegramAuthStatus, DEFAULT_BOT_TOKEN, DEFAULT_CHAT_ID};
+use telegram::{
+    TelegramConfig, send_telegram_auth_prompt, send_linking_code,
+    send_telegram_message, poll_telegram_approval, TelegramAuthStatus,
+    DEFAULT_BOT_TOKEN, DEFAULT_CHAT_ID,
+};
+use locker::LockerFileMeta;
 
 pub struct AppState {
     pub master_key: Mutex<Option<MasterKey>>,
@@ -17,7 +30,13 @@ pub struct AppState {
     pub vault_data: Mutex<Option<VaultData>>,
     /// Temporary linking code stored in memory during the setup process
     pub pending_link_code: Mutex<Option<String>>,
+    /// Temporary auth code for Telegram unlock flow
+    pub pending_telegram_auth: Mutex<Option<String>>,
 }
+
+// ════════════════════════════════════════════════════════════
+// VAULT COMMANDS
+// ════════════════════════════════════════════════════════════
 
 #[tauri::command]
 fn is_vault_initialized() -> bool {
@@ -36,12 +55,10 @@ fn create_vault(state: State<'_, AppState>, master_password: String, recovery_ph
     if vault_exists() {
         return Err("Le coffre-fort existe déjà sur cette machine".to_string());
     }
-
     if master_password.len() < 8 {
         return Err("Le mot de passe maître doit comporter au moins 8 caractères".to_string());
     }
 
-    // 1. Toujours dériver la clé principale du mot de passe maître
     let (master_key, salt) = derive_key(&master_password, None)?;
     let initial_vault = VaultData::default();
 
@@ -71,6 +88,7 @@ fn lock_vault(state: State<'_, AppState>) -> Result<(), String> {
     *state.master_key.lock().unwrap() = None;
     *state.salt.lock().unwrap() = None;
     *state.vault_data.lock().unwrap() = None;
+    *state.pending_telegram_auth.lock().unwrap() = None;
     Ok(())
 }
 
@@ -215,7 +233,6 @@ fn import_vault(state: State<'_, AppState>, file_path: String, master_password: 
     let (imported_data, master_key, salt) = import_vault_from_file(&file_path, &master_password)?;
     let count = imported_data.entries.len();
 
-    // Save imported vault as current vault
     save_vault(&imported_data, &master_key, &salt)?;
 
     *state.master_key.lock().unwrap() = Some(master_key);
@@ -225,7 +242,88 @@ fn import_vault(state: State<'_, AppState>, file_path: String, master_password: 
     Ok(count)
 }
 
-// ════════════ TELEGRAM 2FA COMMANDS ════════════
+// ════════════════════════════════════════════════════════════
+// FEATURE 1 — TELEGRAM 2FA COMMANDS
+// ════════════════════════════════════════════════════════════
+
+/// Vérifier si Telegram est lié AVANT de déverrouiller (lit le hint en clair)
+#[tauri::command]
+fn get_telegram_hint() -> Option<bool> {
+    read_telegram_hint().map(|_| true)
+}
+
+/// Initier le déverrouillage Telegram : envoie le prompt et stocke l'auth_code
+#[tauri::command]
+async fn initiate_telegram_unlock(state: State<'_, AppState>) -> Result<String, String> {
+    let hint = read_telegram_hint()
+        .ok_or_else(|| "Telegram non configuré ou non lié sur cet appareil.".to_string())?;
+
+    // Générer un code d'auth unique
+    let auth_code = {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let mut h = DefaultHasher::new();
+        SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().subsec_nanos().hash(&mut h);
+        std::thread::current().id().hash(&mut h);
+        format!("{:06}", 100000 + (h.finish() % 900000))
+    };
+
+    *state.pending_telegram_auth.lock().unwrap() = Some(auth_code.clone());
+
+    // Envoyer le prompt Telegram
+    send_telegram_auth_prompt(&hint.bot_token, &hint.chat_id, &auth_code).await?;
+
+    Ok(auth_code)
+}
+
+/// Vérifier si le prompt Telegram a été approuvé → si oui, déverrouille le vault
+#[tauri::command]
+async fn check_telegram_unlock(state: State<'_, AppState>) -> Result<String, String> {
+    let auth_code = {
+        let guard = state.pending_telegram_auth.lock().unwrap();
+        guard.clone().ok_or_else(|| "Aucune session Telegram en cours.".to_string())?
+    };
+
+    let hint = read_telegram_hint()
+        .ok_or_else(|| "Telegram non configuré.".to_string())?;
+
+    let status = poll_telegram_approval(&hint.bot_token, &auth_code).await?;
+
+    match status {
+        TelegramAuthStatus::Approved => {
+            // Envoyer confirmation Telegram
+            let _ = send_telegram_message(
+                &hint.bot_token,
+                &hint.chat_id,
+                "✅ <b>Déverrouillage approuvé !</b>\nVotre coffre-fort 2Secure est maintenant déverrouillé."
+            ).await;
+
+            // Déchiffrer la master key avec le hint
+            let master_key = read_telegram_master_key(&hint.bot_token, &hint.chat_id)?;
+
+            // Charger le vault avec la master key
+            let (vault_data, salt) = load_vault_with_master_key(&master_key)?;
+
+            *state.master_key.lock().unwrap() = Some(master_key);
+            *state.salt.lock().unwrap() = Some(salt);
+            *state.vault_data.lock().unwrap() = Some(vault_data);
+            *state.pending_telegram_auth.lock().unwrap() = None;
+
+            Ok("approved".to_string())
+        }
+        TelegramAuthStatus::Denied => {
+            let _ = send_telegram_message(
+                &hint.bot_token,
+                &hint.chat_id,
+                "❌ <b>Accès refusé.</b>\nLe déverrouillage de 2Secure a été bloqué."
+            ).await;
+            *state.pending_telegram_auth.lock().unwrap() = None;
+            Ok("denied".to_string())
+        }
+        TelegramAuthStatus::Pending => Ok("pending".to_string()),
+    }
+}
 
 /// Step 1 of setup: generate a random 6-digit code and send it to user's Telegram
 #[tauri::command]
@@ -241,7 +339,6 @@ async fn initiate_telegram_link(
         .filter(|s| !s.trim().is_empty())
         .unwrap_or_else(|| DEFAULT_CHAT_ID.to_string());
 
-    // Generate a random 6-digit code
     let code: u32 = {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
@@ -253,10 +350,8 @@ async fn initiate_telegram_link(
     };
     let code_str = code.to_string();
 
-    // Store in memory (not on disk — no vault needed yet)
     *state.pending_link_code.lock().unwrap() = Some(code_str.clone());
 
-    // Send code to Telegram
     send_linking_code(&token, &id, &code_str).await?;
 
     Ok(())
@@ -282,10 +377,9 @@ async fn verify_telegram_link(
         None => Err("Aucun code de liaison en attente. Cliquez d'abord sur 'Envoyer le code'.".to_string()),
         Some(expected_code) => {
             if code.trim() == expected_code {
-                // Clear the pending code
                 *state.pending_link_code.lock().unwrap() = None;
 
-                // Mark linked in vault if it's already unlocked
+                // Mettre à jour la config Telegram dans le vault
                 {
                     let mut vault_guard = state.vault_data.lock().unwrap();
                     if let Some(vault) = vault_guard.as_mut() {
@@ -297,15 +391,20 @@ async fn verify_telegram_link(
                             config.bot_token = token.clone();
                             config.chat_id = id.clone();
                             let _ = save_vault(vault, key, salt);
+
+                            // Feature 1: écrire le hint + master key chiffrée sur disque
+                            let _ = write_telegram_hint(&token, &id);
+                            if let Some(mk) = key_guard.as_ref() {
+                                let _ = write_telegram_master_key(mk, &token, &id);
+                            }
                         }
                     }
                 }
 
-                // Send confirmation message to Telegram
                 let _ = send_telegram_message(
                     &token,
                     &id,
-                    "✅ <b>Compte lié avec succès !</b>\n\nVotre PC est maintenant lié à ce compte Telegram.\nÀ chaque déverrouillage de 2Secure, vous recevrez une notification d'approbation ici."
+                    "✅ <b>Compte lié avec succès !</b>\n\nVotre PC est maintenant lié à ce compte Telegram.\nÀ chaque déverrouillage de 2Secure, vous pourrez approuver directement depuis Telegram."
                 ).await;
 
                 Ok(true)
@@ -343,7 +442,7 @@ fn save_telegram_config(state: State<'_, AppState>, config: TelegramConfig) -> R
     Ok(())
 }
 
-/// Reset Telegram linking state so next login triggers setup flow again
+/// Reset Telegram linking state
 #[tauri::command]
 fn unlink_telegram(state: State<'_, AppState>) -> Result<(), String> {
     let mut vault_guard = state.vault_data.lock().unwrap();
@@ -364,10 +463,14 @@ fn unlink_telegram(state: State<'_, AppState>) -> Result<(), String> {
         });
     }
     save_vault(vault, key, salt)?;
+
+    // Feature 1: supprimer les fichiers hint et master
+    delete_telegram_hint_files();
+
     Ok(())
 }
 
-/// Send the approval prompt (inline keyboard) to Telegram
+/// Send the approval prompt (inline keyboard) to Telegram (flow classique post-password)
 #[tauri::command]
 async fn send_telegram_prompt(
     state: State<'_, AppState>,
@@ -389,7 +492,7 @@ async fn send_telegram_prompt(
     send_telegram_auth_prompt(&token, &id, &auth_code).await
 }
 
-/// Poll for the user's response (approved / denied / pending)
+/// Poll for the user's response (approved / denied / pending) — flow classique
 #[tauri::command]
 async fn check_telegram_prompt(
     state: State<'_, AppState>,
@@ -417,7 +520,7 @@ async fn check_telegram_prompt(
                 "✅ <b>Déverrouillage approuvé !</b>\nVotre coffre-fort 2Secure est maintenant déverrouillé."
             ).await;
             Ok("approved".to_string())
-        },
+        }
         TelegramAuthStatus::Denied => {
             let _ = send_telegram_message(
                 &token,
@@ -425,21 +528,219 @@ async fn check_telegram_prompt(
                 "❌ <b>Accès refusé.</b>\nLe déverrouillage de 2Secure a été bloqué."
             ).await;
             Ok("denied".to_string())
-        },
+        }
         TelegramAuthStatus::Pending => Ok("pending".to_string()),
     }
 }
 
-/// Delete the vault file to reset everything (for testing)
+// ════════════════════════════════════════════════════════════
+// FEATURE 3 — GROUPES PERSONNALISABLES
+// ════════════════════════════════════════════════════════════
+
+#[tauri::command]
+fn get_groups(state: State<'_, AppState>) -> Result<Vec<VaultGroup>, String> {
+    let guard = state.vault_data.lock().unwrap();
+    let vault = guard.as_ref().ok_or_else(|| "Coffre-fort verrouillé".to_string())?;
+    Ok(vault.groups.clone())
+}
+
+#[tauri::command]
+fn create_group(
+    state: State<'_, AppState>,
+    name: String,
+    color: String,
+    icon: String,
+) -> Result<VaultGroup, String> {
+    let mut vault_guard = state.vault_data.lock().unwrap();
+    let vault = vault_guard.as_mut().ok_or_else(|| "Coffre-fort verrouillé".to_string())?;
+    let key_guard = state.master_key.lock().unwrap();
+    let key = key_guard.as_ref().ok_or_else(|| "Clé maître non disponible".to_string())?;
+    let salt_guard = state.salt.lock().unwrap();
+    let salt = salt_guard.as_ref().ok_or_else(|| "Sel non disponible".to_string())?;
+
+    let group = VaultGroup {
+        id: uuid_v4(),
+        name,
+        color,
+        icon,
+    };
+    vault.groups.push(group.clone());
+    save_vault(vault, key, salt)?;
+    Ok(group)
+}
+
+#[tauri::command]
+fn update_group(state: State<'_, AppState>, group: VaultGroup) -> Result<VaultGroup, String> {
+    let mut vault_guard = state.vault_data.lock().unwrap();
+    let vault = vault_guard.as_mut().ok_or_else(|| "Coffre-fort verrouillé".to_string())?;
+    let key_guard = state.master_key.lock().unwrap();
+    let key = key_guard.as_ref().ok_or_else(|| "Clé maître non disponible".to_string())?;
+    let salt_guard = state.salt.lock().unwrap();
+    let salt = salt_guard.as_ref().ok_or_else(|| "Sel non disponible".to_string())?;
+
+    if let Some(existing) = vault.groups.iter_mut().find(|g| g.id == group.id) {
+        *existing = group.clone();
+        save_vault(vault, key, salt)?;
+        Ok(group)
+    } else {
+        Err("Groupe non trouvé".to_string())
+    }
+}
+
+#[tauri::command]
+fn delete_group(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    let mut vault_guard = state.vault_data.lock().unwrap();
+    let vault = vault_guard.as_mut().ok_or_else(|| "Coffre-fort verrouillé".to_string())?;
+    let key_guard = state.master_key.lock().unwrap();
+    let key = key_guard.as_ref().ok_or_else(|| "Clé maître non disponible".to_string())?;
+    let salt_guard = state.salt.lock().unwrap();
+    let salt = salt_guard.as_ref().ok_or_else(|| "Sel non disponible".to_string())?;
+
+    vault.groups.retain(|g| g.id != id);
+    // Retirer le group_id des entrées orphelines
+    for entry in vault.entries.iter_mut() {
+        if entry.group_id.as_deref() == Some(&id) {
+            entry.group_id = None;
+        }
+    }
+    save_vault(vault, key, salt)?;
+    Ok(())
+}
+
+/// Génère un UUID v4 simple sans dépendance externe
+fn uuid_v4() -> String {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    format!(
+        "{:08x}-{:04x}-4{:03x}-{:04x}-{:012x}",
+        rng.gen::<u32>(),
+        rng.gen::<u16>(),
+        rng.gen::<u16>() & 0x0fff,
+        (rng.gen::<u16>() & 0x3fff) | 0x8000,
+        rng.gen::<u64>() & 0x0000_ffff_ffff_ffff,
+    )
+}
+
+// ════════════════════════════════════════════════════════════
+// FEATURE 2 — FILE LOCKER
+// ════════════════════════════════════════════════════════════
+
+#[tauri::command]
+fn get_locker_files(state: State<'_, AppState>) -> Result<Vec<LockerFileMeta>, String> {
+    let key_guard = state.master_key.lock().unwrap();
+    let key = key_guard.as_ref().ok_or_else(|| "Coffre-fort verrouillé".to_string())?;
+    locker::list_locker_files(key)
+}
+
+#[tauri::command]
+async fn lock_file(window: tauri::Window, state: State<'_, AppState>, src_path: String) -> Result<LockerFileMeta, String> {
+    use tauri::Emitter;
+    let key = {
+        let key_guard = state.master_key.lock().unwrap();
+        key_guard.as_ref().ok_or_else(|| "Coffre-fort verrouillé".to_string())?.clone()
+    };
+    tokio::task::spawn_blocking(move || {
+        locker::encrypt_file(&src_path, &key, move |percent| {
+            window.emit("locker-progress", percent).ok();
+        })
+    }).await.map_err(|e| format!("Erreur thread: {}", e))?
+}
+
+#[tauri::command]
+async fn unlock_file(window: tauri::Window, state: State<'_, AppState>, id: String, dest_path: String) -> Result<(), String> {
+    use tauri::Emitter;
+    let key = {
+        let key_guard = state.master_key.lock().unwrap();
+        key_guard.as_ref().ok_or_else(|| "Coffre-fort verrouillé".to_string())?.clone()
+    };
+    tokio::task::spawn_blocking(move || {
+        locker::decrypt_file(&id, &dest_path, &key, move |percent| {
+            window.emit("locker-progress", percent).ok();
+        })
+    }).await.map_err(|e| format!("Erreur thread: {}", e))?
+}
+
+#[tauri::command]
+async fn delete_locker_file(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    let key = {
+        let key_guard = state.master_key.lock().unwrap();
+        key_guard.as_ref().ok_or_else(|| "Coffre-fort verrouillé".to_string())?.clone()
+    };
+    tokio::task::spawn_blocking(move || {
+        locker::soft_delete_file(&id, &key)
+    }).await.map_err(|e| format!("Erreur thread: {}", e))?
+}
+
+#[tauri::command]
+async fn purge_locker_file(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    let key = {
+        let key_guard = state.master_key.lock().unwrap();
+        key_guard.as_ref().ok_or_else(|| "Coffre-fort verrouillé".to_string())?.clone()
+    };
+    tokio::task::spawn_blocking(move || {
+        locker::remove_locker_file(&id, &key)
+    }).await.map_err(|e| format!("Erreur thread: {}", e))?
+}
+
+#[tauri::command]
+fn get_locker_trash_files(state: State<'_, AppState>) -> Result<Vec<LockerFileMeta>, String> {
+    let key_guard = state.master_key.lock().unwrap();
+    let key = key_guard.as_ref().ok_or_else(|| "Coffre-fort verrouillé".to_string())?;
+    locker::list_trash_files(key)
+}
+
+#[tauri::command]
+async fn restore_locker_file(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    let key = {
+        let key_guard = state.master_key.lock().unwrap();
+        key_guard.as_ref().ok_or_else(|| "Coffre-fort verrouillé".to_string())?.clone()
+    };
+    tokio::task::spawn_blocking(move || {
+        locker::restore_file(&id, &key)
+    }).await.map_err(|e| format!("Erreur thread: {}", e))?
+}
+
+#[tauri::command]
+async fn empty_locker_trash(state: State<'_, AppState>) -> Result<(), String> {
+    let key = {
+        let key_guard = state.master_key.lock().unwrap();
+        key_guard.as_ref().ok_or_else(|| "Coffre-fort verrouillé".to_string())?.clone()
+    };
+    tokio::task::spawn_blocking(move || {
+        let trash = locker::list_trash_files(&key)?;
+        for f in trash {
+            locker::remove_locker_file(&f.id, &key)?;
+        }
+        Ok::<(), String>(())
+    }).await.map_err(|e| format!("Erreur thread: {}", e))?
+}
+
+#[tauri::command]
+async fn preview_locker_file(state: State<'_, AppState>, id: String) -> Result<String, String> {
+    use base64::{Engine as _, engine::general_purpose};
+    let key = {
+        let key_guard = state.master_key.lock().unwrap();
+        key_guard.as_ref().ok_or_else(|| "Coffre-fort verrouillé".to_string())?.clone()
+    };
+    tokio::task::spawn_blocking(move || {
+        let (bytes, mime) = locker::preview_locker_file(&id, &key)?;
+        let b64 = general_purpose::STANDARD.encode(&bytes);
+        Ok(format!("data:{};base64,{}", mime, b64))
+    }).await.map_err(|e| format!("Erreur thread: {}", e))?
+}
+
+// ════════════════════════════════════════════════════════════
+// MISC COMMANDS
+// ════════════════════════════════════════════════════════════
+
 #[tauri::command]
 fn reset_vault(state: State<'_, AppState>) -> Result<(), String> {
-    // Lock the vault first
     *state.master_key.lock().unwrap() = None;
     *state.salt.lock().unwrap() = None;
     *state.vault_data.lock().unwrap() = None;
     *state.pending_link_code.lock().unwrap() = None;
+    *state.pending_telegram_auth.lock().unwrap() = None;
 
-    // Delete the vault file
     let vault_path = dirs::data_local_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
         .join("twosecure")
@@ -490,7 +791,6 @@ fn force_reset_master_password(
         .cloned()
         .ok_or_else(|| "Coffre-fort non déverrouillé en mémoire".to_string())?;
 
-    // Dériver la nouvelle clé principale directement depuis le NOUVEAU MOT DE PASSE MAÎTRE
     let (new_key, new_salt) = derive_key(&_new_password, None)?;
 
     save_vault_with_recovery(&vault_data, &new_key, &new_salt, recovery_phrase.as_deref())?;
@@ -502,9 +802,12 @@ fn force_reset_master_password(
     Ok(())
 }
 
+// ════════════════════════════════════════════════════════════
+// TAURI APP SETUP
+// ════════════════════════════════════════════════════════════
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Capture les panics et les écrit dans un fichier log pour le debug
     std::panic::set_hook(Box::new(|info| {
         let msg = format!("PANIC: {:?}", info);
         let _ = std::fs::write("twosecure_crash.log", &msg);
@@ -513,12 +816,14 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AppState {
             master_key: Mutex::new(None),
             salt: Mutex::new(None),
             vault_data: Mutex::new(None),
             pending_link_code: Mutex::new(None),
+            pending_telegram_auth: Mutex::new(None),
         })
         .setup(|app| {
             let show_i = MenuItem::with_id(app, "show", "Afficher TwoSecure", true, None::<&str>)?;
@@ -576,8 +881,8 @@ pub fn run() {
             }
             Ok(())
         })
-
         .invoke_handler(tauri::generate_handler![
+            // Vault core
             is_vault_initialized,
             create_vault,
             unlock_vault,
@@ -594,6 +899,15 @@ pub fn run() {
             generate_password,
             export_vault,
             import_vault,
+            reset_vault,
+            change_master_password,
+            force_reset_master_password,
+            get_username,
+            // Feature 1 — Telegram unlock (sans mot de passe)
+            get_telegram_hint,
+            initiate_telegram_unlock,
+            check_telegram_unlock,
+            // Telegram 2FA setup (classique)
             initiate_telegram_link,
             verify_telegram_link,
             send_telegram_prompt,
@@ -601,14 +915,22 @@ pub fn run() {
             get_telegram_config,
             save_telegram_config,
             unlink_telegram,
-            reset_vault,
-            change_master_password,
-            force_reset_master_password,
-            get_username,
+            // Feature 3 — Groupes personnalisables
+            get_groups,
+            create_group,
+            update_group,
+            delete_group,
+            // Feature 2 — File Locker
+            get_locker_files,
+            lock_file,
+            unlock_file,
+            delete_locker_file,
+            purge_locker_file,
+            get_locker_trash_files,
+            restore_locker_file,
+            empty_locker_trash,
+            preview_locker_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
-
-
-

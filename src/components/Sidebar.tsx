@@ -3,6 +3,8 @@ import { ShieldCheck, Key, CreditCard, FileText, Star, Lock, Shield, HardDriveDo
 import { invoke } from '@tauri-apps/api/core';
 
 
+import { VaultGroup } from '../types';
+
 interface SidebarProps {
   currentCategory: string;
   onSelectCategory: (category: string) => void;
@@ -13,6 +15,8 @@ interface SidebarProps {
   onOpenTrash: () => void;
   onOpenAudit: () => void;
   onOpenUpdate?: () => void;
+  groups?: VaultGroup[];
+  onOpenLocker?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -25,6 +29,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenTrash,
   onOpenAudit,
   onOpenUpdate,
+  groups = [],
+  onOpenLocker,
 }) => {
   const [username, setUsername] = useState<string>('');
 
@@ -115,6 +121,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           return (
             <button
               key={item.id}
+              data-dropzone={item.id === 'all' ? 'ungrouped' : undefined}
               onClick={() => onSelectCategory(item.id)}
               style={{
                 display: 'flex',
@@ -168,6 +175,100 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
           );
         })}
+
+        {/* Custom Groups */}
+        {groups && groups.length > 0 && (
+          <>
+            <div style={{
+              fontSize: '11px', fontWeight: 700, color: 'rgba(203, 213, 225, 0.4)',
+              textTransform: 'uppercase', letterSpacing: '0.8px',
+              padding: '16px 10px 10px 10px',
+            }}>
+              GROUPES
+            </div>
+            {groups.map((group) => {
+              const isActive = currentCategory === group.id;
+              return (
+                <button
+                  key={group.id}
+                  data-dropzone={group.id}
+                  onClick={() => onSelectCategory(group.id)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '10px 14px',
+                    borderRadius: '14px',
+                    border: isActive ? `1px solid ${group.color}60` : '1px solid transparent',
+                    background: isActive
+                      ? `linear-gradient(135deg, ${group.color}40 0%, rgba(30, 16, 42, 0.5) 100%)`
+                      : 'transparent',
+                    color: isActive ? '#ffffff' : 'rgba(203, 213, 225, 0.65)',
+                    fontWeight: isActive ? 600 : 500,
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease-in-out',
+                    textAlign: 'left',
+                    boxShadow: isActive ? `0 0 20px ${group.color}30` : 'none',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                      e.currentTarget.style.color = '#ffffff';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.background = 'transparent';
+                      e.currentTarget.style.color = 'rgba(203, 213, 225, 0.65)';
+                    }
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <span style={{ fontSize: '18px' }}>{group.icon}</span>
+                    <span style={{ fontSize: '13.5px' }}>{group.name}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </>
+        )}
+
+        {/* Locker */}
+        <div style={{
+          fontSize: '11px', fontWeight: 700, color: 'rgba(203, 213, 225, 0.4)',
+          textTransform: 'uppercase', letterSpacing: '0.8px',
+          padding: '16px 10px 10px 10px',
+        }}>
+          OUTILS
+        </div>
+        <button
+          onClick={onOpenLocker}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            padding: '10px 14px',
+            borderRadius: '14px',
+            border: '1px solid transparent',
+            background: 'transparent',
+            color: 'rgba(203, 213, 225, 0.65)',
+            fontWeight: 500,
+            cursor: 'pointer',
+            transition: 'all 0.3s ease-in-out',
+            textAlign: 'left',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'rgba(139, 92, 246, 0.08)';
+            e.currentTarget.style.color = '#ffffff';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'transparent';
+            e.currentTarget.style.color = 'rgba(203, 213, 225, 0.65)';
+          }}
+        >
+          <Lock size={18} color="rgba(203, 213, 225, 0.45)" />
+          <span style={{ fontSize: '13.5px' }}>File Locker chiffré</span>
+        </button>
       </nav>
 
       {/* Footer Section (Always pinned to bottom) */}

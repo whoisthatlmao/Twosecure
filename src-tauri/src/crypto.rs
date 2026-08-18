@@ -15,6 +15,12 @@ pub struct MasterKey {
     pub key_bytes: [u8; 32],
 }
 
+impl Clone for MasterKey {
+    fn clone(&self) -> Self {
+        Self { key_bytes: self.key_bytes }
+    }
+}
+
 impl MasterKey {
     pub fn new(bytes: [u8; 32]) -> Self {
         Self { key_bytes: bytes }
