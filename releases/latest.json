@@ -1,10 +1,10 @@
 {
   "version": "0.2.6",
-  "notes": "TwoSecure v0.2.4 - Mise à jour majeure :\n- Icône dans la barre des tâches (tray icon)\n- Système de mise à jour automatique\n- Changement du mot de passe maître\n- Configuration Telegram optionnelle\n- Audit de sécurité amélioré (exclusion cartes bancaires)\n- Notifications modales personnalisées\n- Correction de divers bugs",
-  "pub_date": "2026-08-10T23:41:48Z",
+  "notes": "TwoSecure v0.2.6",
+  "pub_date": "2026-08-18T02:20:47Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUTUV1aVh6UlhDOXRSWjB0V3JJR3MrUjg3aHdSSCtWelpmdEh4ZUl0ZEkraGZUWEFQVEoyKzdCdnJKdUZncXJydjhMRE91UzlLV3BRSGtPNlp4WkcycTNOcGxyYy92clFrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg3MDExODIzCWZpbGU6VHdvU2VjdXJlXzAuMi42X3g2NC1zZXR1cC5leGUKakV1U2Q1eHAwMHBNcVJqZnYraGVxWlYwUzdiUzlEVkdHTGhDeU1jSjYwNTc0aGY5b0pwTk11eWxLY0JoRnM5QW5wQ2ZpY1pZb3YzOWZOTDBMR2ZMRGc9PQo=",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUTUV1aVh6UlhDOW9iU1BUNGhzZXJCLzlXTE1nVDZSWEM1U1VjYU9CMkRmd0lwOElRTjJrQkdnZGdaem8wOGRpMmtQQXBrVERHeTZUdE1XdE1qTmpYL2FoNk9ObXRQdUF3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg2MzIxMjU5CWZpbGU6VHdvU2VjdXJlXzAuMS4wX3g2NC1zZXR1cC5leGUKYWFCVTJ3cWdxemowMGpWYWdxcDdka29JT3VRQ2E1ODUzUUtQaFlyemEzQys1S2dFNW9nd0RFSHo3MnVIcW15d28xV0hleXMxaWE2RlF0a1JhcVBFREE9PQo=",
       "url": "https://github.com/whoisthatlmao/Twosecure/releases/download/v0.2.6/TwoSecure_0.2.6_x64-setup.exe"
     }
   }
